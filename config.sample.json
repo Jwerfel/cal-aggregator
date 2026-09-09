@@ -1,6 +1,7 @@
 {
   "port": 3000,
   "apiKey": "super-secret-key-12345",
+  "feedName": "All My Events",
   "calendars": [
     {
       "id": "work-cal",

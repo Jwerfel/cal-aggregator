@@ -85,7 +85,9 @@ app.get('/calendar.ics', (req, res) => {
     return res.status(401).send('Unauthorized: Invalid or missing security key.');
   }
 
-  const combinedCal = icalGenerator({ name: 'Aggregated Feed' });
+  let feedName = config.feedName || "Aggregated Feed";
+
+  const combinedCal = icalGenerator({ name: feedName });
 
   // Merge events from all cached calendars
   Object.values(eventCache).forEach(eventList => {

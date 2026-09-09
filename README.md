@@ -17,9 +17,11 @@ npm start
 
 ## Production
 1. Git clone ```https://github.com/Jwerfel/cal-aggregator.git```
-2. Copy ```config.sample.json``` to ```config.json``` and modify ```config.json``` as needed
+2. Copy ```config.sample.json``` to ```config.json``` and modify ```config.json``` as needed. Do not modify the port in this config file. If you need to use a different external port modify it in the ```docker-compose.yml``` 
 3. Copy ```docker-compose-sample.yml``` to ```docker-compose.yml```. Modify ```docker-compose.yml``` if needed
 4. Run 
 ```
-docker-compose up -d --build
+docker compose up -d --build
 ```
+
+I recommend you put this behind a reverse proxy such as nginx
