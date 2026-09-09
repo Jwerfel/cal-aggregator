@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  cal-aggregator:
+    build: .
+    container_name: calendar_aggregator
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.json:/usr/src/app/config.json:ro

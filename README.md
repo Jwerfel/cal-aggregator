@@ -16,7 +16,7 @@ npm start
 
 
 ## Production
-1. Git clone ```https://```
+1. Git clone ```https://github.com/Jwerfel/cal-aggregator.git```
 2. Copy ```config.sample.json``` to ```config.json``` and modify ```config.json``` as needed
 3. Copy ```docker-compose-sample.yml``` to ```docker-compose.yml```. Modify ```docker-compose.yml``` if needed
 4. Run 

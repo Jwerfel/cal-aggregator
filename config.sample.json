@@ -1,0 +1,27 @@
+{
+  "port": 3000,
+  "apiKey": "super-secret-key-12345",
+  "calendars": [
+    {
+      "id": "work-cal",
+      "enabled": true,
+      "refreshIntervalSeconds": 600,
+      "url": "https://example.com/work.ics",
+      "prefix": "[Work] "
+    },
+    {
+      "id": "personal-cal",
+      "enabled": true,
+      "refreshIntervalSeconds": 300,
+      "url": "https://example.com/personal.ics",
+      "prefix": ""
+    },
+    {
+      "id": "sports-cal",
+      "enabled": false,
+      "refreshIntervalSeconds": 1800,
+      "url": "https://example.com/sports.ics",
+      "prefix": "⚽ "
+    }
+  ]
+}
