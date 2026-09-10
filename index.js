@@ -2,12 +2,35 @@ const express = require('express');
 const axios = require('axios');
 const ICAL = require('ical.js');
 const icalGenerator = require('ical-generator').default;
+const winston = require('winston');
+const fs = require('fs');
+const path = require('path');
 const config = require('./config.json');
 
 const app = express();
 const PORT = process.env.PORT || config.port || 3000;
 
-// In-memory cache for parsed events: { calendarId: [ array of event objects ] }
+// Ensure logs directory exists
+const logDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir);
+}
+
+// Setup Winston Logger (console + file output)
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] [${level.toUpperCase()}]: ${message}`)
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: path.join(logDir, 'app.log') }),
+    new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' })
+  ]
+});
+
+// In-memory cache
 const eventCache = {};
 
 /**
@@ -17,7 +40,7 @@ async function refreshCalendar(calConfig) {
   if (!calConfig.enabled) return;
 
   try {
-    console.log(`[${new Date().toISOString()}] Refreshing: ${calConfig.id}`);
+    logger.info(`Refreshing source: ${calConfig.id}`);
     const response = await axios.get(calConfig.url, { timeout: 10000 });
     const parsedIcal = ICAL.parse(response.data);
     const comp = new ICAL.Component(parsedIcal);
@@ -31,10 +54,9 @@ async function refreshCalendar(calConfig) {
     for (const vevent of vevents) {
       const event = new ICAL.Event(vevent);
 
-      // Check event start time against cutoff date
       const eventStart = event.startDate ? event.startDate.toJSDate() : null;
       if (eventStart && eventStart < cutoffDate) {
-        continue; // Skip events older than 14 days ago
+        continue;
       }
 
       const prefix = calConfig.prefix || '';
@@ -52,27 +74,48 @@ async function refreshCalendar(calConfig) {
     }
 
     eventCache[calConfig.id] = validEvents;
-    console.log(`[${calConfig.id}] Successfully cached ${validEvents.length} events.`);
+    logger.info(`Successfully cached ${validEvents.length} events for [${calConfig.id}]`);
   } catch (error) {
-    console.error(`[ERROR] Failed to fetch calendar ${calConfig.id}:`, error.message);
+    logger.error(`Failed to fetch calendar [${calConfig.id}]: ${error.message}`);
   }
 }
 
 /**
- * Initialize background refresh timers for each enabled source.
+ * Initialize background refresh timers.
  */
 function initScheduler() {
   for (const cal of config.calendars) {
     if (!cal.enabled) continue;
 
-    // Fetch immediately on startup
     refreshCalendar(cal);
 
-    // Default to 10 minutes (600 seconds) if unspecified
     const intervalSec = cal.refreshIntervalSeconds || 600;
     setInterval(() => refreshCalendar(cal), intervalSec * 1000);
   }
 }
+
+/**
+ * Authenticated Health Check Endpoint
+ * Access format: GET /health?key=YOUR_SECURITY_KEY
+ */
+app.get('/health', (req, res) => {
+  const providedKey = req.query.key;
+
+  if (!providedKey || providedKey !== config.apiKey) {
+    logger.warn(`Unauthorized health check access attempt from IP: ${req.ip}`);
+    return res.status(401).json({ status: 'unauthorized' });
+  }
+
+  const enabledCalendars = config.calendars.filter(c => c.enabled);
+
+  res.json({
+    status: 'ok',
+    totalConfiguredCalendars: config.calendars.length,
+    activeCalendars: enabledCalendars.length,
+    cachedSources: Object.keys(eventCache).length,
+    timestamp: new Date().toISOString()
+  });
+});
 
 /**
  * Combined Calendar Endpoint
@@ -82,14 +125,12 @@ app.get('/calendar.ics', (req, res) => {
   const providedKey = req.query.key;
 
   if (!providedKey || providedKey !== config.apiKey) {
+    logger.warn(`Unauthorized calendar access attempt from IP: ${req.ip}`);
     return res.status(401).send('Unauthorized: Invalid or missing security key.');
   }
 
-  let feedName = config.feedName || "Aggregated Feed";
+  const combinedCal = icalGenerator({ name: 'Aggregated Feed' });
 
-  const combinedCal = icalGenerator({ name: feedName });
-
-  // Merge events from all cached calendars
   Object.values(eventCache).forEach(eventList => {
     eventList.forEach(evt => {
       combinedCal.createEvent({
@@ -104,7 +145,6 @@ app.get('/calendar.ics', (req, res) => {
     });
   });
 
-  // Set response headers and send the raw ICS string
   res.writeHead(200, {
     'Content-Type': 'text/calendar; charset=utf-8',
     'Content-Disposition': 'attachment; filename="calendar.ics"'
@@ -113,8 +153,8 @@ app.get('/calendar.ics', (req, res) => {
   return res.end(combinedCal.toString());
 });
 
-// Start application
+// Start server
 app.listen(PORT, () => {
-  console.log(`Calendar aggregator running on port ${PORT}`);
+  logger.info(`Calendar aggregator service running on port ${PORT}`);
   initScheduler();
 });

@@ -9,3 +9,4 @@ services:
       - "3000:3000"
     volumes:
       - ./config.json:/usr/src/app/config.json:ro
+      - ./logs:/usr/src/app/logs
