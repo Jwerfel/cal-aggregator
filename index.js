@@ -3,6 +3,7 @@ const axios = require('axios');
 const ICAL = require('ical.js');
 const icalGenerator = require('ical-generator').default;
 const winston = require('winston');
+require('winston-daily-rotate-file');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config.json');
@@ -16,17 +17,44 @@ if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir);
 }
 
-// Setup Winston Logger (console + file output)
+// Common log format
+const logFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] [${level.toUpperCase()}]: ${message}`)
+);
+
+// Define rotating transport for general application logs
+const combinedRotateTransport = new winston.transports.DailyRotateFile({
+  filename: path.join(logDir, 'app-%DATE%.log'),
+  datePattern: 'YYYY-MM-DD',
+  zippedArchive: true,      // Compress old logs into gzip
+  maxSize: '20m',           // Rotate if file exceeds 20 Megabytes
+  maxFiles: '14d'           // Keep logs for 14 days, then auto-delete
+});
+
+// Define rotating transport strictly for error logs
+const errorRotateTransport = new winston.transports.DailyRotateFile({
+  level: 'error',
+  filename: path.join(logDir, 'error-%DATE%.log'),
+  datePattern: 'YYYY-MM-DD',
+  zippedArchive: true,
+  maxSize: '20m',
+  maxFiles: '30d'           // Keep error logs longer (30 days)
+});
+
+// Optional audit log events (e.g., when rotation occurs)
+combinedRotateTransport.on('rotate', (oldFilename, newFilename) => {
+  console.log(`Log rotated from ${oldFilename} to ${newFilename}`);
+});
+
+// Setup Logger instance
 const logger = winston.createLogger({
   level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] [${level.toUpperCase()}]: ${message}`)
-  ),
+  format: logFormat,
   transports: [
     new winston.transports.Console(),
-    new winston.transports.File({ filename: path.join(logDir, 'app.log') }),
-    new winston.transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' })
+    combinedRotateTransport,
+    errorRotateTransport
   ]
 });
 
